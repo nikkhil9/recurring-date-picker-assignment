@@ -1,6 +1,5 @@
-// src/components/RecurringDatePicker.jsx
-'use client'; // This is a client component because it uses hooks (useState)
 
+'use client'; 
 import React, { useState, useMemo } from 'react';
 import { 
     format, addDays, addWeeks, addMonths, addYears, startOfMonth, endOfMonth, 

@@ -1,6 +1,7 @@
 
 'use client'; 
-import React, { useState, useMemo } from 'react';
+
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
     format, addDays, addWeeks, addMonths, addYears, startOfMonth, endOfMonth, 
     startOfWeek, endOfWeek, getDay, isSameDay, getDaysInMonth, setDate, 
@@ -8,7 +9,6 @@ import {
 } from 'date-fns';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Info, CheckCircle, X } from 'lucide-react';
 
-// --- CONSTANTS & HELPER COMPONENTS ---
 
 const WEEK_DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const WEEK_DAYS_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -32,7 +32,7 @@ const Button = ({ children, onClick, className = '', variant = 'primary' }) => {
         ghost: 'bg-transparent text-gray-800 hover:bg-teal-50',
     };
     return <button onClick={onClick} className={`${baseClasses} ${variantClasses[variant]} ${className}`}>{children}</button>;
-}; 
+};
 
 const NumberInput = ({ value, onChange, min = 1 }) => (
     <input
@@ -107,11 +107,13 @@ const WeeklyConfig = ({ recurrence, setRecurrence }) => {
 const MonthlyConfig = ({ recurrence, setRecurrence, startDate }) => {
     const handleMonthlyTypeChange = (type) => {
         const newMonthly = { ...recurrence.monthly, type };
-        if (type === 'dayOfMonth') {
-            newMonthly.day = startDate.getDate();
-        } else {
-            newMonthly.week = Math.ceil(startDate.getDate() / 7);
-            newMonthly.dayOfWeek = getDay(startDate);
+        if (startDate) {
+            if (type === 'dayOfMonth') {
+                newMonthly.day = startDate.getDate();
+            } else {
+                newMonthly.week = Math.ceil(startDate.getDate() / 7);
+                newMonthly.dayOfWeek = getDay(startDate);
+            }
         }
         setRecurrence({ ...recurrence, monthly: newMonthly });
     };
@@ -150,6 +152,12 @@ const YearlyConfig = ({ recurrence, setRecurrence }) => (
 
 const CalendarPreview = ({ recurringDates, startDate }) => {
     const [currentMonth, setCurrentMonth] = useState(startDate || new Date());
+
+    useEffect(() => {
+        if (startDate) {
+            setCurrentMonth(startDate);
+        }
+    }, [startDate]);
 
     const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
     const prevMonth = () => setCurrentMonth(addMonths(currentMonth, -1));
@@ -204,20 +212,33 @@ const CalendarPreview = ({ recurringDates, startDate }) => {
 // --- MAIN COMPONENT ---
 
 export default function RecurringDatePicker() {
-    const [startDate, setStartDate] = useState(new Date());
+    // Initialize state with null to prevent server/client mismatch
+    const [startDate, setStartDate] = useState(null);
     const [endDate, setEndDate] = useState(null);
-    const [isConfirmed, setIsConfirmed] = useState(false); // State for confirmation modal
+    const [isConfirmed, setIsConfirmed] = useState(false);
     const [recurrence, setRecurrence] = useState({
         type: 'daily',
         interval: 1,
-        daysOfWeek: [getDay(new Date())],
-        monthly: {
-            type: 'dayOfMonth',
-            day: new Date().getDate(),
-            week: Math.ceil(new Date().getDate() / 7),
-            dayOfWeek: getDay(new Date()),
-        },
+        daysOfWeek: [],
+        monthly: { type: 'dayOfMonth', day: 1, week: 1, dayOfWeek: 0 },
     });
+
+    // This useEffect runs only on the client, after the component has mounted
+    useEffect(() => {
+        const now = new Date();
+        setStartDate(now);
+        setRecurrence({
+            type: 'daily',
+            interval: 1,
+            daysOfWeek: [getDay(now)],
+            monthly: {
+                type: 'dayOfMonth',
+                day: now.getDate(),
+                week: Math.ceil(now.getDate() / 7),
+                dayOfWeek: getDay(now),
+            },
+        });
+    }, []); // The empty dependency array ensures this runs only once on mount
 
     const handleStartDateChange = (date) => {
         if (!date) return;
@@ -238,13 +259,8 @@ export default function RecurringDatePicker() {
         setRecurrence(prev => ({ ...prev, type }));
     };
     
-    const handleConfirm = () => {
-        setIsConfirmed(true);
-    };
-    
-    const handleCloseConfirmation = () => {
-        setIsConfirmed(false);
-    };
+    const handleConfirm = () => setIsConfirmed(true);
+    const handleCloseConfirmation = () => setIsConfirmed(false);
 
     const recurringDates = useMemo(() => {
         if (!startDate) return [];
@@ -291,7 +307,7 @@ export default function RecurringDatePicker() {
     }, [startDate, endDate, recurrence]);
 
     const getSummaryText = () => {
-        if (!startDate) return "Select a start date.";
+        if (!startDate) return "Loading...";
         
         let summary = `Occurs `;
         switch(recurrence.type) {
@@ -299,8 +315,8 @@ export default function RecurringDatePicker() {
                 summary += recurrence.interval > 1 ? `every ${recurrence.interval} days` : 'daily';
                 break;
             case 'weekly':
-                summary += recurrence.interval > 1 ? `every ${recurrence.interval} weeks` : 'weekly';
                 const selectedDays = recurrence.daysOfWeek.map(d => WEEK_DAYS_FULL[d]).join(', ');
+                summary += recurrence.interval > 1 ? `every ${recurrence.interval} weeks` : 'weekly';
                 summary += ` on ${selectedDays}`;
                 break;
             case 'monthly':
@@ -325,6 +341,15 @@ export default function RecurringDatePicker() {
         
         return summary + '.';
     };
+    
+    // Render a loading state until the component has mounted on the client
+    if (!startDate) {
+        return (
+            <div className="bg-gradient-to-br from-gray-50 to-slate-100 p-8 font-sans max-w-4xl mx-auto rounded-2xl shadow-2xl border border-gray-200 text-center">
+                <h1 className="text-2xl font-bold text-gray-600">Loading Scheduler...</h1>
+            </div>
+        );
+    }
 
     return (
         <div className="relative bg-gradient-to-br from-gray-50 to-slate-100 p-4 sm:p-6 md:p-8 font-sans max-w-4xl mx-auto rounded-2xl shadow-2xl border border-gray-200">

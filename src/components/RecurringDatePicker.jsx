@@ -32,7 +32,7 @@ const Button = ({ children, onClick, className = '', variant = 'primary' }) => {
         ghost: 'bg-transparent text-gray-800 hover:bg-teal-50',
     };
     return <button onClick={onClick} className={`${baseClasses} ${variantClasses[variant]} ${className}`}>{children}</button>;
-};
+}; 
 
 const NumberInput = ({ value, onChange, min = 1 }) => (
     <input
